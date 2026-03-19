@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Expense Tracker</title>
+
+  <!-- MOBILE SCALING -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      font-family: Arial;
+      background: #fff;
+      margin: 0;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 500px;
+      padding: 15px;
+    }
+
+    h2, h3 {
+      text-align: center;
+    }
+
+    .box {
+      border: 1px solid #000;
+      padding: 15px;
+      margin: 12px 0;
+      border-radius: 10px;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 8px;
+      font-size: 16px;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 12px;
+      margin-top: 8px;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+
+    textarea {
+      resize: none;
+      height: 80px;
+    }
+
+    #history {
+      max-height: 250px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+<h2>Accounts</h2>
+
+<div class="box">
+  <input id="accountName" placeholder="Enter name">
+  <button id="createBtn">Create Account</button>
+</div>
+
+<div id="accounts"></div>
+
+<hr>
+
+<div id="dashboard" style="display:none;">
+  <h2 id="userTitle"></h2>
+
+  <div class="box">
+    <b>Balance: ₱<span id="balance">0</span></b>
+  </div>
+
+  <button id="showTransaction">+ Transaction</button>
+
+  <div id="transactionForm" class="box" style="display:none;">
+    <input id="tName" placeholder="Transaction name">
+    <textarea id="tNote" placeholder="Notes"></textarea>
+    <input id="tAmount" type="number" placeholder="Amount">
+
+    <select id="type">
+      <option value="add">Gain</option>
+      <option value="subtract">Loss</option>
+    </select>
+
+    <select id="target"></select>
+
+    <button id="applyTransaction">Apply</button>
+  </div>
+
+  <h3>Savings</h3>
+  <button id="showSavings">+ Add Savings</button>
+
+  <div id="savingsForm" class="box" style="display:none;">
+    <input id="sName" placeholder="Savings name">
+    <textarea id="sNote" placeholder="Note"></textarea>
+
+    <select id="sMode">
+      <option value="free">Just create (no money)</option>
+      <option value="transfer">Add money from main balance</option>
+    </select>
+
+    <input id="sAmount" type="number" placeholder="Amount (optional)">
+
+    <button id="createSavings">Create</button>
+  </div>
+
+  <div id="savings"></div>
+
+  <h3>History</h3>
+  <div id="history" class="box"></div>
+
+  <button id="backBtn">← Back</button>
+</div>
+
+</div>
+
+<script>
+window.onload = function () {
+
+let data = JSON.parse(localStorage.getItem("tracker")) || {};
+let current = null;
+
+function save() {
+  localStorage.setItem("tracker", JSON.stringify(data));
+}
+
+/* ACCOUNT */
+document.getElementById("createBtn").addEventListener("click", function () {
+  let input = document.getElementById("accountName");
+  let name = input.value.trim();
+
+  if (!name) return alert("Enter a name");
+  if (data[name]) return alert("Already exists");
+
+  data[name] = { balance: 0, history: [], savings: {} };
+
+  input.value = "";
+  save();
+  renderAccounts();
+});
+
+function deleteAccount(name) {
+  if (!confirm("Delete account?")) return;
+  delete data[name];
+  save();
+  renderAccounts();
+}
+
+function renderAccounts() {
+  let container = document.getElementById("accounts");
+  container.innerHTML = "";
+
+  if (Object.keys(data).length === 0) {
+    container.innerHTML = "<i>No accounts yet</i>";
+    return;
+  }
+
+  for (let name in data) {
+    let div = document.createElement("div");
+    div.className = "box";
+
+    div.innerHTML = `<b>${name}</b>`;
+
+    let openBtn = document.createElement("button");
+    openBtn.innerText = "Open";
+    openBtn.addEventListener("click", () => openAccount(name));
+
+    let deleteBtn = document.createElement("button");
+    deleteBtn.innerText = "Delete";
+    deleteBtn.addEventListener("click", () => deleteAccount(name));
+
+    div.appendChild(openBtn);
+    div.appendChild(deleteBtn);
+
+    container.appendChild(div);
+  }
+}
+
+function openAccount(name) {
+  current = name;
+  document.getElementById("dashboard").style.display = "block";
+  document.getElementById("accounts").style.display = "none";
+  document.getElementById("userTitle").innerText = name;
+  updateDashboard();
+}
+
+document.getElementById("backBtn").addEventListener("click", function () {
+  document.getElementById("dashboard").style.display = "none";
+  document.getElementById("accounts").style.display = "block";
+});
+
+/* DASHBOARD */
+function updateDashboard() {
+  let acc = data[current];
+  document.getElementById("balance").innerText = acc.balance;
+
+  let sDiv = document.getElementById("savings");
+  sDiv.innerHTML = "";
+
+  for (let s in acc.savings) {
+    let box = document.createElement("div");
+    box.className = "box";
+
+    box.innerHTML = `<b>${s}</b><br>₱${acc.savings[s].balance}`;
+
+    let delBtn = document.createElement("button");
+    delBtn.innerText = "Delete";
+    delBtn.addEventListener("click", () => deleteSavings(s));
+
+    box.appendChild(delBtn);
+    sDiv.appendChild(box);
+  }
+
+  let hDiv = document.getElementById("history");
+  hDiv.innerHTML = "";
+
+  [...acc.history].reverse().forEach((h, i) => {
+    let div = document.createElement("div");
+    div.className = "box";
+
+    div.innerHTML = `<b>${h.name}</b><br>${h.note}<br>₱${h.amount}`;
+
+    let delBtn = document.createElement("button");
+    delBtn.innerText = "Delete";
+    delBtn.addEventListener("click", () => deleteTransaction(acc.history.length - 1 - i));
+
+    div.appendChild(delBtn);
+    hDiv.appendChild(div);
+  });
+
+  let target = document.getElementById("target");
+  target.innerHTML = `<option value="main">Main Balance</option>`;
+
+  for (let s in acc.savings) {
+    target.innerHTML += `<option value="${s}">${s}</option>`;
+  }
+}
+
+/* TRANSACTIONS */
+document.getElementById("showTransaction").addEventListener("click", () => {
+  document.getElementById("transactionForm").style.display = "block";
+});
+
+document.getElementById("applyTransaction").addEventListener("click", function () {
+  let name = document.getElementById("tName").value;
+  let note = document.getElementById("tNote").value;
+  let amount = parseFloat(document.getElementById("tAmount").value);
+  let type = document.getElementById("type").value;
+  let target = document.getElementById("target").value;
+
+  if (!name || isNaN(amount)) return;
+
+  let acc = data[current];
+  let finalAmount = type === "add" ? amount : -amount;
+
+  if (target === "main") acc.balance += finalAmount;
+  else acc.savings[target].balance += finalAmount;
+
+  acc.history.push({ name, note, amount: finalAmount, target });
+
+  document.getElementById("tName").value = "";
+  document.getElementById("tNote").value = "";
+  document.getElementById("tAmount").value = "";
+
+  save();
+  updateDashboard();
+});
+
+function deleteTransaction(i) {
+  let acc = data[current];
+  let t = acc.history[i];
+
+  if (t.target === "main") acc.balance -= t.amount;
+  else acc.savings[t.target].balance -= t.amount;
+
+  acc.history.splice(i, 1);
+  save();
+  updateDashboard();
+}
+
+/* SAVINGS */
+document.getElementById("showSavings").addEventListener("click", () => {
+  document.getElementById("savingsForm").style.display = "block";
+});
+
+document.getElementById("createSavings").addEventListener("click", function () {
+  let name = document.getElementById("sName").value;
+  let note = document.getElementById("sNote").value;
+  let mode = document.getElementById("sMode").value;
+  let amount = parseFloat(document.getElementById("sAmount").value) || 0;
+
+  if (!name) return;
+
+  let acc = data[current];
+  acc.savings[name] = { note, balance: 0 };
+
+  if (mode === "transfer" && amount > 0) {
+    acc.balance -= amount;
+    acc.savings[name].balance += amount;
+
+    acc.history.push({
+      name: "Savings Transfer",
+      note: `Moved to ${name}`,
+      amount: -amount,
+      target: "main"
+    });
+  }
+
+  save();
+  updateDashboard();
+});
+
+function deleteSavings(name) {
+  if (!confirm("Delete savings?")) return;
+  delete data[current].savings[name];
+  save();
+  updateDashboard();
+}
+
+/* INIT */
+renderAccounts();
+
+};
+</script>
+
+</div>
+</body>
+</html>
